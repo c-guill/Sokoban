@@ -128,7 +128,7 @@ public class ControleurMediateur implements CollecteurEvenements {
 			case "Full":
 				vue.toggleFullscreen();
 				break;
-			case "Skip":s
+			case "Skip":
 				jeu.prochainNiveau();
 				break;
 			default:
