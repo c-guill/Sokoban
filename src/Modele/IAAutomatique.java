@@ -3,6 +3,7 @@ package Modele;
 import Global.Configuration;
 import Structures.Sequence;
 
+import javax.swing.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,7 +24,6 @@ public class IAAutomatique extends IA{
     //    private HashMap<Integer, ArrayList<Integer>> parcourus = new HashMap();
     private HashMap<Integer, int[]> parcourus;
     private int min;
-    private int[][] butdist;
 
 
     @Override
@@ -39,9 +39,7 @@ public class IAAutomatique extends IA{
         ArrayList<Integer> Buts = getSommets(Niveau.BUT);
 
         long startTime = System.currentTimeMillis();
-
-        this.butdist = Dijkstra(Buts.get(0), false);
-        ArrayList<Integer> result = cheminOptimal(0,source,Caisses.get(0),Buts.get(0));
+        ArrayList<Integer> result = cheminOptimal(0,source,Caisses,Buts);
         if(result == null){
             System.err.println("Impossible de résoudre le niveau");
             //modification de IA pour pouvoir skip de niveau
@@ -51,8 +49,10 @@ public class IAAutomatique extends IA{
             long endTime = System.currentTimeMillis();
             System.out.println("Temps execution: "+ (endTime - startTime));
             //remettre la carte comme elle était avant
-            int[] coord = convertToMap(Caisses.get(0));
-            this.niveau.cases[coord[0]][coord[1]] = Niveau.CAISSE;
+            for(Integer c : Caisses) {
+                int[] coordC = convertToMap(c);
+                this.niveau.cases[coordC[0]][coordC[1]] = Niveau.CAISSE;
+            }
             this.niveau.cases[pousseurL][pousseurC] = Niveau.POUSSEUR;
 
             for (int i = 0; i < result.size() - 1; i++) {
@@ -63,22 +63,13 @@ public class IAAutomatique extends IA{
         return resultat;
     }
 
-    private ArrayList<Integer> cheminOptimal(int size, int source, int caisse, int but){
+    private ArrayList<Integer> cheminOptimal(int size, int source, ArrayList<Integer> caisses, ArrayList<Integer> buts){
         if(size > min){
             return null;
         }
 
-        // modification de la carte
-        int[] coordP = convertToMap(source);
-        this.niveau.cases[coordP[0]][coordP[1]] = Niveau.POUSSEUR;
-        int[] coordC = convertToMap(caisse);
-        this.niveau.cases[coordC[0]][coordC[1]] = Niveau.CAISSE;
 
-        int[][] dijkstra = Dijkstra(source,true);
-        this.niveau.cases[coordP[0]][coordP[1]] = Niveau.VIDE;
-        this.niveau.cases[coordC[0]][coordC[1]] = Niveau.VIDE;
-
-        int h = hash(dijkstra[1],caisse, source);
+        int h = hash(caisses, source);
         if(this.parcourus.containsKey(h)){
             int[] value = this.parcourus.get(h);
             if(value[1] <= size){
@@ -92,22 +83,38 @@ public class IAAutomatique extends IA{
             int[] value = {source,size};
             this.parcourus.put(h,value);
         }
-        if(caisse == but) {
-//            System.out.println("BUT-> "+size);
+        if(finished(caisses,buts)) {
             ArrayList<Integer> result = new ArrayList<>();
             result.add(source);
-//            result.add(caisse);
             if(min > size){
                 min = size;
             }
             return result;
         }else{
+            // modification de la carte
+            int[] coordP = convertToMap(source);
+            this.niveau.cases[coordP[0]][coordP[1]] = Niveau.POUSSEUR;
+            for(Integer c : caisses) {
+                int[] coordC = convertToMap(c);
+                this.niveau.cases[coordC[0]][coordC[1]] = Niveau.CAISSE;
+            }
+            int[][] dijkstra = Dijkstra(source,true);
             //emplacement ou peut aller la caisse
-            ArrayList<Integer> emplacement = getEmplacementCaisse(dijkstra[1], caisse);
+            ArrayList<int[]> emplacement = getEmplacementCaisse(dijkstra[1], caisses);
+            this.niveau.cases[coordP[0]][coordP[1]] = Niveau.VIDE;
+            for(Integer c : caisses) {
+                int[] coordC = convertToMap(c);
+                this.niveau.cases[coordC[0]][coordC[1]] = Niveau.VIDE;
+            }
             ArrayList<ArrayList<Integer>> possibilite = new ArrayList<>();
-            for (Integer c : emplacement) {
-                int[] chemins = getChemin(dijkstra[1],dijkstra[0],source,getEmplacementAvant(caisse,c));
-                ArrayList<Integer> tmp = cheminOptimal(size + chemins.length, caisse, c, but);
+            for (int[] c : emplacement) {
+                int caisseid = c[0];
+                int caisse = caisses.get(caisseid);
+                int nouveau = c[1];
+                int[] chemins = getChemin(dijkstra[1],dijkstra[0],source,getEmplacementAvant(caisse,nouveau));
+                caisses.set(caisseid,nouveau);
+                ArrayList<Integer> tmp = cheminOptimal(size + chemins.length, caisse, caisses, buts);
+                caisses.set(caisseid,caisse);
                 if(tmp != null) {
                     for(int i = 0 ; i< chemins.length; i++){
                         tmp.add(i, chemins[i]);
@@ -129,80 +136,24 @@ public class IAAutomatique extends IA{
 
     }
 
-/*
-    //ajouter chemin pour aller caisse (dijkstra)
-    private ArrayList<Integer> cheminOptimal(int source, int caisse, int but, int size){
-//        System.out.println(caisse);
-        if(caisse == but){
-            ArrayList<Integer> res = new ArrayList<>();
-            res.add(but);
-            System.out.println("BUT");
-            return res;
-        }
-        ArrayList<Integer> result;
-
-        //maj niveau
-        int[] coordP = convertToMap(source);
-        this.niveau.cases[coordP[0]][coordP[1]] = Niveau.POUSSEUR;
-        int[] coordC = convertToMap(caisse);
-        this.niveau.cases[coordC[0]][coordC[1]] = Niveau.CAISSE;
-
-        int[][] dijkstra = Dijkstra(source,true);
-        this.niveau.cases[coordP[0]][coordP[1]] = Niveau.VIDE;
-        this.niveau.cases[coordC[0]][coordC[1]] = Niveau.VIDE;
-        int h = hash(dijkstra[1],caisse);
-        ArrayList<Integer> value = null;
-        if(this.parcourus.containsKey(h)){
-            value = this.parcourus.get(h);
-            if(value == null || value.size() < size){
-                return this.parcourus.get(h);
-            }else if(value.size() > size){
-                this.parcourus.replace(h,null);
-            }
-        }else {
-            this.parcourus.put(h,null);
-        }
-        System.out.println("Parcous de: "+caisse+" -> "+size);
-        if(value != null){
-            System.out.println(value.size() +" < " +size );
-        }
-
-        ArrayList<ArrayList<Integer>> possibilite = new ArrayList<>();
-        ArrayList<Integer> emplacement = getEmplacementCaisse(dijkstra[1],caisse);
-//        System.out.println(caisse+": "+emplacement);
-        for(Integer c : emplacement){
-            result = cheminOptimal(caisse,c,but,size+1);
-            if(result != null) {
-                result.add(0,caisse);
-                possibilite.add(result);
+    private boolean finished(ArrayList<Integer> caisses, ArrayList<Integer> buts){
+        int i = 0;
+        for (int c : caisses){
+            for(int b : buts){
+                if(c==b){
+                    i++;
+                    break;
+                }
             }
         }
-        if(possibilite.isEmpty()){
-            return null;
-        }
-        result = possibilite.get(0);
-        for(ArrayList<Integer> p : possibilite){
-            if(result.size() > p.size()){
-                result = p;
-            }
-        }
-        value = this.parcourus.get(h);
-        if(value == null || value.size() > result.size()){
-            this.parcourus.replace(h,result);
-        }
-        return result;
+        return caisses.size() == i;
+
     }
-*/
 
-    //pas trop de cas depuis le rajout de s2 ?
-    private int hash(int[] tab, int s, int s2){
-        int result = s*31+s2;
-        for (int i = 0; i < tab.length; i++) {
-            if(tab[i] == -1){
-                result = 31 * result + 2;
-            }else {
-                result = 31 * result + 3;
-            }
+    private int hash(ArrayList<Integer> caisses, int pousseur){
+        int result = pousseur;
+        for (int i = 0; i < caisses.size(); i++) {
+            result = 31 * result + caisses.get(i);
         }
         return result;
     }
@@ -246,36 +197,37 @@ public class IAAutomatique extends IA{
         return result;
     }
 
-    public ArrayList<Integer> getEmplacementCaisse(int[] prev, int target){
-        ArrayList<Integer> result = new ArrayList<>();
-        int[] c = convertToMap(target);
-        int x = c[0];
-        int y = c[1];
+    /**
+     *
+     * @param prev
+     * @param caisses
+     * @return int[ancien empalcement(id), nouveau emplacement]
+     */
+    public ArrayList<int[]> getEmplacementCaisse(int[] prev, ArrayList<Integer> caisses){
+        ArrayList<int[]> result = new ArrayList<>();
+        for(int i = 0; i < caisses.size();i++) {
+            int caisse = caisses.get(i);
+            int[] c = convertToMap(caisse);
+            int x = c[0];
+            int y = c[1];
 
-        for(int[] t : tab){
-            x+=t[0];
-            y+=t[1];
-            int s = convertToGraph(x,y);
-            int dest = getEmplacementApres(s,target);
-            int[] coord = convertToMap(dest);
-            if(prev[s]!=-1 && !this.niveau.aMur(coord[0],coord[1])){
-                int i = 0;
-                while (result.size() > i && this.butdist[1][result.get(i)] > this.butdist[1][dest]){
-                    i++;
+            for (int[] t : tab) {
+                x += t[0];
+                y += t[1];
+                int s = convertToGraph(x, y);
+                int dest = getEmplacementApres(s, caisse);
+                int[] coord = convertToMap(dest);
+                if (prev[s] != -1 && !this.niveau.aMur(coord[0], coord[1]) && !this.niveau.aCaisse(coord[0], coord[1])) {
+                    int j = 0;
+                    result.add(j, new int[]{i,dest});
                 }
-                result.add(i, dest);
+                x = c[0];
+                y = c[1];
             }
-            x = c[0];
-            y = c[1];
         }
         return result;
     }
 
-    private double calculerDistance(int s1, int s2){
-        int[] A = convertToMap(s1);
-        int[] B = convertToMap(s2);
-        return Math.sqrt(Math.pow(A[0]-B[0],2)+Math.pow(A[1]-B[1],2));
-    }
 
     /**
      *
