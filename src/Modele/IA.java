@@ -32,7 +32,7 @@ import Structures.Sequence;
 import java.util.logging.Logger;
 
 public abstract class IA {
-	private Jeu jeu;
+	protected Jeu jeu; // changement de private a protected
 	Niveau niveau;
 
 	public static IA nouvelle(Jeu j) {
