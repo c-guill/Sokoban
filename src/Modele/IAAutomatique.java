@@ -13,6 +13,10 @@ import java.util.HashMap;
 public class IAAutomatique extends IA{
 
     private final int MAX = 2147483647;
+    final static int VERT = 0x00CC00;
+    final static int MARRON = 0xBB7755;
+
+
     private final int[][] tab = new int[][]
             {
                     {-1,0},
@@ -38,7 +42,6 @@ public class IAAutomatique extends IA{
         ArrayList<Integer> Caisses = getSommets(Niveau.CAISSE);
         ArrayList<Integer> Buts = getSommets(Niveau.BUT);
 
-        long startTime = System.currentTimeMillis();
         ArrayList<Integer> result = cheminOptimal(0,source,Caisses,Buts);
         if(result == null){
             System.err.println("Impossible de résoudre le niveau");
@@ -46,8 +49,6 @@ public class IAAutomatique extends IA{
             resultat.insereQueue(this.niveau.deplace(0,0));
             this.jeu.prochainNiveau();
         }else {
-            long endTime = System.currentTimeMillis();
-            System.out.println("Temps execution: "+ (endTime - startTime));
             //remettre la carte comme elle était avant
             for(Integer c : Caisses) {
                 int[] coordC = convertToMap(c);
@@ -64,11 +65,10 @@ public class IAAutomatique extends IA{
     }
 
     private ArrayList<Integer> cheminOptimal(int size, int source, ArrayList<Integer> caisses, ArrayList<Integer> buts){
-        if(size > min){
+        int heuristique = heuristique(caisses, buts);
+        if(size+heuristique > min){
             return null;
         }
-
-
         int h = hash(caisses, source);
         if(this.parcourus.containsKey(h)){
             int[] value = this.parcourus.get(h);
@@ -100,7 +100,7 @@ public class IAAutomatique extends IA{
             }
             int[][] dijkstra = Dijkstra(source,true);
             //emplacement ou peut aller la caisse
-            ArrayList<int[]> emplacement = getEmplacementCaisse(dijkstra[1], caisses);
+            ArrayList<int[]> emplacement = getEmplacementCaisse(dijkstra[1], caisses, buts);
             this.niveau.cases[coordP[0]][coordP[1]] = Niveau.VIDE;
             for(Integer c : caisses) {
                 int[] coordC = convertToMap(c);
@@ -149,6 +149,29 @@ public class IAAutomatique extends IA{
         return caisses.size() == i;
 
     }
+
+    public int heuristique(ArrayList<Integer> caisses, ArrayList<Integer> buts){
+        return totalHeuristique(caisses, buts);
+    }
+
+    public int totalHeuristique(ArrayList<Integer> caisses, ArrayList<Integer> buts){
+        int result=0;
+        for(Integer caisse : caisses){
+            int[] coordc = convertToMap(caisse);
+            int min = MAX;
+            for(Integer but : buts){
+                int[] coordb = convertToMap(but);
+                min = Math.min(manhattan(coordc[0],coordc[1],coordb[0],coordb[1]), min);
+            }
+            result += min;
+        }
+        return result;
+    }
+
+    public int manhattan(int Xa, int Ya, int Xb, int Yb){
+        return Math.abs(Xb - Xa)  + Math.abs(Yb - Ya);
+    }
+
 
     private int hash(ArrayList<Integer> caisses, int pousseur){
         int result = pousseur;
@@ -201,9 +224,9 @@ public class IAAutomatique extends IA{
      *
      * @param prev
      * @param caisses
-     * @return int[ancien empalcement(id), nouveau emplacement]
+     * @return int[ancien empalcement(id), nouveau emplacement, heuristique]
      */
-    public ArrayList<int[]> getEmplacementCaisse(int[] prev, ArrayList<Integer> caisses){
+    public ArrayList<int[]> getEmplacementCaisse(int[] prev, ArrayList<Integer> caisses, ArrayList<Integer> buts){
         ArrayList<int[]> result = new ArrayList<>();
         for(int i = 0; i < caisses.size();i++) {
             int caisse = caisses.get(i);
@@ -216,17 +239,26 @@ public class IAAutomatique extends IA{
                 y += t[1];
                 int s = convertToGraph(x, y);
                 int dest = getEmplacementApres(s, caisse);
+                caisses.set(i,dest);
+                int heuristique = heuristique(caisses, buts);
+                caisses.set(i,caisse);
                 int[] coord = convertToMap(dest);
                 if (prev[s] != -1 && !this.niveau.aMur(coord[0], coord[1]) && !this.niveau.aCaisse(coord[0], coord[1])) {
                     int j = 0;
-                    result.add(j, new int[]{i,dest});
+                    while(j < result.size() &&  result.get(j)[2] <= heuristique){
+                        j++;
+                    }
+                    result.add(j, new int[]{i,dest,heuristique});
                 }
                 x = c[0];
                 y = c[1];
             }
         }
+
         return result;
     }
+
+
 
 
     /**
